@@ -1,0 +1,173 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAXP 20
+#define TOKLEN 16
+
+struct Player {
+    char name[50];
+    int runs;
+    int balls;
+    int fours;
+    int sixes;
+    int out;
+};
+
+struct Fall {
+    char name[50];
+    int score;
+    int over;
+    int ball;
+};
+
+int main() {
+    int n, maxOvers;
+    struct Player p[MAXP];
+    struct Fall falls[MAXP];
+    int fallCount = 0;
+    char team[50];
+    printf("Enter Team Name: ");
+    scanf("%49s", team);
+    printf("Enter number of players (<=%d): ", MAXP);
+    if (scanf("%d", &n)!=1 || n<2 || n>MAXP) return 0;
+    for (int i=0;i<n;i++) {
+        printf("Enter player %d name: ", i+1);
+        scanf("%49s", p[i].name);
+        p[i].runs=0; p[i].balls=0; p[i].fours=0; p[i].sixes=0; p[i].out=0;
+    }
+    printf("Enter number of overs for innings: ");
+    if (scanf("%d", &maxOvers)!=1 || maxOvers<1) return 0;
+    int legalBallsLimit = maxOvers * 6;
+    int legalBalls = 0;
+    int totalRuns = 0;
+    int wickets = 0;
+    int extras = 0;
+    int wides = 0, noballs = 0, byes = 0, legbyes = 0;
+    int striker = 0, nonStriker = 1, nextBat = 2;
+    char token[TOKLEN];
+    printf("\nStart innings. Enter per-ball result tokens:\n");
+    printf("  0..6 => runs\n  W => wicket\n  WD => wide (enter runs as additional number when asked)\n  NB => no-ball (enter extra and optionally bat runs)\n  BY => bye (enter runs)\n  LB => leg-bye (enter runs)\n\n");
+    int ballCount=0;
+    while (legalBalls < legalBallsLimit && wickets < n-1) {
+        int overNum = legalBalls / 6;
+        int ballInOver = legalBalls % 6 + 1;
+        printf("Over %d.%d, Ball %d (striker: %s). Input: ", overNum, ballInOver, legalBalls+1, p[striker].name);
+        if (scanf("%15s", token)!=1) break;
+        if (strcmp(token,"W")==0 || strcmp(token,"w")==0) {
+            p[striker].balls++;
+            wickets++;
+            legalBalls++;
+            printf("WICKET! %s is OUT at %d/%d\n", p[striker].name, totalRuns, wickets);
+            if (fallCount < MAXP) {
+                strcpy(falls[fallCount].name, p[striker].name);
+                falls[fallCount].score = totalRuns;
+                falls[fallCount].over = legalBalls/6;
+                falls[fallCount].ball = legalBalls%6;
+                fallCount++;
+            }
+            p[striker].out = 1;
+            if (nextBat < n) {
+                striker = nextBat;
+                nextBat++;
+                printf("New batsman: %s\n", p[striker].name);
+            } else {
+                printf("All out or no batsman available.\n");
+                break;
+            }
+        } else if (strcmp(token,"WD")==0 || strcmp(token,"wd")==0) {
+            int r;
+            printf("Wide runs (usually 1): ");
+            if (scanf("%d",&r)!=1) break;
+            runs: ;
+            wides += r;
+            extras += r;
+            totalRuns += r;
+            printf("Wide +%d\n", r);
+        } else if (strcmp(token,"NB")==0 || strcmp(token,"nb")==0) {
+            int extra, offbat;
+            printf("No-ball extra runs (usually 1): ");
+            if (scanf("%d",&extra)!=1) break;
+            printf("Runs scored off the bat on free-hit (0 if none): ");
+            if (scanf("%d",&offbat)!=1) break;
+            noballs += extra;
+            extras += extra;
+            totalRuns += extra + offbat;
+            if (offbat>0) {
+                p[striker].runs += offbat;
+                p[striker].balls += 0;
+                if (offbat==4) p[striker].fours++;
+                if (offbat==6) p[striker].sixes++;
+            }
+            printf("No-ball: extra %d, bat %d\n", extra, offbat);
+        } else if (strcmp(token,"BY")==0 || strcmp(token,"by")==0) {
+            int r;
+            printf("Bye runs: ");
+            if (scanf("%d",&r)!=1) break;
+            byes += r;
+            extras += r;
+            totalRuns += r;
+            legalBalls++;
+            if (r%2==1) {
+                int tmp=striker; striker=nonStriker; nonStriker=tmp;
+            }
+        } else if (strcmp(token,"LB")==0 || strcmp(token,"lb")==0) {
+            int r;
+            printf("Leg-bye runs: ");
+            if (scanf("%d",&r)!=1) break;
+            legbyes += r;
+            extras += r;
+            totalRuns += r;
+            legalBalls++;
+            if (r%2==1) {
+                int tmp=striker; striker=nonStriker; nonStriker=tmp;
+            }
+        } else {
+            int run = atoi(token);
+            if (run >= 0 && run <= 6) {
+                p[striker].runs += run;
+                p[striker].balls++;
+                if (run==4) p[striker].fours++;
+                if (run==6) p[striker].sixes++;
+                totalRuns += run;
+                legalBalls++;
+                if (run%2==1) {
+                    int tmp=striker; striker=nonStriker; nonStriker=tmp;
+                }
+            } else {
+                printf("Invalid token. Try again.\n");
+                continue;
+            }
+        }
+        if (legalBalls>0 && legalBalls%6==0) {
+            int tmp=striker; striker=nonStriker; nonStriker=tmp;
+        }
+    }
+    printf("\n\n------------------------------ FINAL SCOREBOARD ------------------------------\n");
+    printf("Team: %s\n", team);
+    printf("Total: %d/%d  Overs: %d.%d\n", totalRuns, wickets, legalBalls/6, legalBalls%6);
+    double oversFloat = (double)legalBalls/6.0 + (double)(legalBalls%6)/6.0;
+    if (legalBalls==0) oversFloat = 0.0;
+    double runRate = oversFloat>0 ? (double)totalRuns / oversFloat : 0.0;
+    printf("Run Rate: %.2f\n", runRate);
+    printf("Extras: %d (WD %d, NB %d, BY %d, LB %d)\n", extras, wides, noballs, byes, legbyes);
+    printf("\nBatting Card:\n");
+    printf("%-20s %4s %4s %4s %4s %8s\n", "Player", "R", "B", "4s", "6s", "Status");
+    for (int i=0;i<n;i++) {
+        char status[20];
+        if (p[i].out) strcpy(status,"OUT");
+        else {
+            if (i==striker || i==nonStriker) sprintf(status,"NOT OUT");
+            else sprintf(status,"NOT OUT");
+        }
+        printf("%-20s %4d %4d %4d %4d %8s\n", p[i].name, p[i].runs, p[i].balls, p[i].fours, p[i].sixes, status);
+    }
+    if (fallCount>0) {
+        printf("\nFall of wickets:\n");
+        for (int i=0;i<fallCount;i++) {
+            printf("%d) %s - %d (%d.%d)\n", i+1, falls[i].name, falls[i].score, falls[i].over, falls[i].ball);
+        }
+    }
+    printf("-------------------------------------------------------------------------------\n");
+    return 0;
+}
